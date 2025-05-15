@@ -7,6 +7,10 @@ from telethon.tl.types import ChannelParticipantsSearch
 from telethon.errors import FloodWaitError
 import asyncio
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Enable logging
 logging.basicConfig(
@@ -20,26 +24,33 @@ stats_cache = {}
 CACHE_EXPIRY = timedelta(hours=6)
 
 # Telethon client setup
-def get_telethon_client():
+async def get_telethon_client():
     api_id = os.getenv('TELEGRAM_API_ID')
     api_hash = os.getenv('TELEGRAM_API_HASH')
-    phone = os.getenv('TELEGRAM_PHONE')
     session_name = 'group_stats_bot'
     
-    if not all([api_id, api_hash, phone]):
-        logger.error("Missing Telethon environment variables")
+    if not all([api_id, api_hash]):
+        logger.error("Missing Telethon environment variables (TELEGRAM_API_ID or TELEGRAM_API_HASH)")
         return None
     
-    return TelegramClient(session_name, int(api_id), api_hash)
+    # Initialize the client with the existing session
+    client = TelegramClient(session_name, int(api_id), api_hash)
+    await client.connect()
+    
+    # Check if the client is authorized
+    if not await client.is_user_authorized():
+        logger.error("Session is not authorized. Run auth_telethon.py to generate the session file.")
+        await client.disconnect()
+        return None
+    
+    return client
 
 async def get_detailed_stats(chat_id):
-    client = get_telethon_client()
+    client = await get_telethon_client()
     if not client:
         return None
     
     try:
-        await client.start(phone=os.getenv('TELEGRAM_PHONE'))
-        
         deleted_count = 0
         premium_count = 0
         total_count = 0
@@ -83,7 +94,7 @@ async def get_cached_stats(chat_id):
         }
     return data
 
-# Command handlers (updated)
+# Command handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Hello! I'm an advanced group stats bot. Use /stats in a group to get detailed member statistics. "
@@ -154,7 +165,6 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await stats(update, context)
     await update.message.reply_text("Stats cache cleared and refreshed!")
 
-# Keep your existing help and details functions
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Available commands:\n"
@@ -176,7 +186,6 @@ def main() -> None:
         "BOT_TOKEN",
         "TELEGRAM_API_ID",
         "TELEGRAM_API_HASH",
-        "TELEGRAM_PHONE"
     ]
     
     missing_vars = [var for var in required_vars if not os.getenv(var)]
