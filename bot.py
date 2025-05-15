@@ -19,7 +19,7 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Available commands:\n"
         "/start - Welcome message\n"
         "/stats - Get group member statistics\n"
-        "/details - Get detailed group stats\n"
+        "/details - Get detailed group stats (limited)\n"
         "/refresh - Refresh group stats\n"
         "/help - Show this help message"
     )
@@ -43,31 +43,16 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Error checking admin status: {e}")
         return
 
-    # Initialize counters
-    deleted_count = 0
-    premium_count = 0
-    normal_count = 0
-    total_count = 0
-
     try:
-        # Fetch all members (Telegram API limits may apply)
-        async for member in context.bot.get_chat_members(chat_id):
-            total_count += 1
-            user = member.user
-            if user.is_deleted:
-                deleted_count += 1
-            elif user.is_premium:
-                premium_count += 1
-            else:
-                normal_count += 1
-
-        # Prepare response
+        # Get total member count
+        total_count = await context.bot.get_chat_members_count(chat_id)
+        
+        # Note: Bot API doesn't allow fetching all members to check deleted/premium status
         response = (
             f"📊 Group Member Statistics 📊\n"
             f"Total Members: {total_count}\n"
-            f"Deleted Accounts: {deleted_count}\n"
-            f"Premium Members: {premium_count}\n"
-            f"Normal Members: {normal_count}"
+            f"Note: Detailed stats (deleted/premium members) are not fully supported by the Telegram Bot API.\n"
+            f"Use /details for admin info or consider a Client API for advanced features."
         )
         await update.message.reply_text(response)
 
@@ -93,24 +78,18 @@ async def details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Error checking admin status: {e}")
         return
 
-    # Initialize lists and counters
-    premium_users = []
-    deleted_count = 0
-
     try:
-        # Fetch all members
-        async for member in context.bot.get_chat_members(chat_id):
-            user = member.user
-            if user.is_premium:
-                premium_users.append(f"@{user.username}" if user.username else f"ID:{user.id}")
-            if user.is_deleted:
-                deleted_count += 1
+        # Get admin list as a fallback for "detailed" stats
+        admin_users = []
+        for admin in admins:
+            user = admin.user
+            status = "Premium" if user.is_premium else "Normal"
+            admin_users.append(f"@{user.username or user.id} ({status})")
 
-        # Prepare response
         response = (
             f"📋 Detailed Group Stats 📋\n"
-            f"Premium Members: {', '.join(premium_users) or 'None'}\n"
-            f"Deleted Accounts: {deleted_count}"
+            f"Admins: {', '.join(admin_users) or 'None'}\n"
+            f"Note: Full member list (deleted/premium) is not supported by the Bot API."
         )
         await update.message.reply_text(response)
 
