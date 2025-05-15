@@ -44,9 +44,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     try:
-        # Get total member count (corrected method name)
-        total_count = await context.bot.get_chat_member_count(chat_id)
-        
+        # Get total member count
+        total_count = await context.bot.get_chat_members_count(chat_id)
+
         # Note: Bot API doesn't allow fetching all members to check deleted/premium status
         response = (
             f"📊 Group Member Statistics 📊\n"
@@ -78,7 +78,7 @@ async def details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Error checking admin status: {e}")
         return
 
-    try RANGE_SAFETY:
+    try:
         # Get admin list as a fallback for "detailed" stats
         admin_users = []
         for admin in admins:
