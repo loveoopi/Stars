@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # Telegram Client API credentials
 api_id = 20284828
 api_hash = "a980ba25306901d5c9b899414d6a9ab7"
-bot_token = os.getenv("7593658145:AAHhK4VKAFDrrteIgm-d7ZE4PAQ7XL3QdYE")
+bot_token = os.getenv("BOT_TOKEN")  # Corrected to use BOT_TOKEN environment variable
 
 # Initialize Telethon client
 client = TelegramClient('bot', api_id, api_hash)
