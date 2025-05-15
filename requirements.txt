@@ -1,3 +1,3 @@
-python-telegram-bot==x.y.z
-telethon==x.y.z
-python-dotenv==x.y.z
+python-telegram-bot==20.8
+telethon==1.36.0
+python-dotenv==1.0.1
