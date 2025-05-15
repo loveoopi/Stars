@@ -1,136 +1,149 @@
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 import os
+from telethon import TelegramClient, events
+from telethon.tl.types import User
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Telegram Client API credentials
+api_id = 20284828
+api_hash = "a980ba25306901d5c9b899414d6a9ab7"
+bot_token = os.getenv("7593658145:AAETv2jYleC4eZU67eZjeyv3w4KdDKFQ5fg")  # Set in Heroku environment
+
+# Initialize Telethon client
+client = TelegramClient('bot', api_id, api_hash)
+
 # Command handler for /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
+@client.on(events.NewMessage(pattern='/start'))
+async def start(event):
+    await event.reply(
         "Hello! I'm a group stats bot. Use /stats in a group to get member statistics. Make sure I'm an admin!"
     )
 
 # Command handler for /help
-async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
+@client.on(events.NewMessage(pattern='/help'))
+async def help(event):
+    await event.reply(
         "Available commands:\n"
         "/start - Welcome message\n"
         "/stats - Get group member statistics\n"
-        "/details - Get detailed group stats (limited)\n"
+        "/details - Get detailed group stats\n"
         "/refresh - Refresh group stats\n"
         "/help - Show this help message"
     )
 
 # Command handler for /stats
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Check if the command is used in a group
-    if not update.effective_chat or update.effective_chat.type not in ['group', 'supergroup']:
-        await update.message.reply_text("This command can only be used in a group or supergroup.")
+@client.on(events.NewMessage(pattern='/stats'))
+async def stats(event):
+    if not event.is_group:
+        await event.reply("This command can only be used in a group or supergroup.")
         return
+
+    chat = await event.get_chat()
+    chat_id = chat.id
 
     # Check if the bot has admin privileges
-    bot_id = context.bot.id
-    chat_id = update.effective_chat.id
     try:
-        admins = await context.bot.get_chat_administrators(chat_id)
-        if not any(admin.user.id == bot_id for admin in admins):
-            await update.message.reply_text("I need to be an admin to fetch member details!")
+        admins = await client.get_participants(chat, filter=client.get_filter('ChatAdministrators'))
+        bot_id = (await client.get_me()).id
+        if not any(admin.id == bot_id for admin in admins):
+            await event.reply("I need to be an admin to fetch member details!")
             return
     except Exception as e:
-        await update.message.reply_text(f"Error checking admin status: {e}")
+        await event.reply(f"Error checking admin status: {e}")
         return
 
     try:
-        # Get total member count
-        total_count = await context.bot.get_chat_member_count(chat_id)
-        
-        # Note: Bot API doesn't allow fetching all members to check deleted/premium status
+        # Initialize counters
+        deleted_count = 0
+        premium_count = 0
+        normal_count = 0
+        total_count = 0
+
+        # Fetch all members
+        async for user in client.iter_participants(chat):
+            total_count += 1
+            if user.is_deleted:
+                deleted_count += 1
+            elif getattr(user, 'is_premium', False):
+                premium_count += 1
+            else:
+                normal_count += 1
+
         response = (
             f"📊 Group Member Statistics 📊\n"
             f"Total Members: {total_count}\n"
-            f"Note: Detailed stats (deleted/premium members) are not fully supported by the Telegram Bot API.\n"
-            f"Use /details for admin info or consider a Client API for advanced features."
+            f"Deleted Accounts: {deleted_count}\n"
+            f"Premium Members: {premium_count}\n"
+            f"Normal Members: {normal_count}"
         )
-        await update.message.reply_text(response)
+        await event.reply(response)
 
     except Exception as e:
-        await update.message.reply_text(f"Error fetching member stats: {e}")
+        await event.reply(f"Error fetching member stats: {e}")
 
 # Command handler for /details
-async def details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Check if the command is used in a group
-    if not update.effective_chat or update.effective_chat.type not in ['group', 'supergroup']:
-        await update.message.reply_text("This command can only be used in a group or supergroup.")
+@client.on(events.NewMessage(pattern='/details'))
+async def details(event):
+    if not event.is_group:
+        await event.reply("This command can only be used in a group or supergroup.")
         return
+
+    chat = await event.get_chat()
+    chat_id = chat.id
 
     # Check if the bot has admin privileges
-    bot_id = context.bot.id
-    chat_id = update.effective_chat.id
     try:
-        admins = await context.bot.get_chat_administrators(chat_id)
-        if not any(admin.user.id == bot_id for admin in admins):
-            await update.message.reply_text("I need to be an admin to fetch member details!")
+        admins = await client.get_participants(chat, filter=client.get_filter('ChatAdministrators'))
+        bot_id = (await client.get_me()).id
+        if not any(admin.id == bot_id for admin in admins):
+            await event.reply("I need to be an admin to fetch member details!")
             return
     except Exception as e:
-        await update.message.reply_text(f"Error checking admin status: {e}")
+        await event.reply(f"Error checking admin status: {e}")
         return
 
     try:
-        # Get admin list as a fallback for "detailed" stats
-        admin_users = []
-        for admin in admins:
-            user = admin.user
-            status = "Premium" if user.is_premium else "Normal"
-            admin_users.append(f"@{user.username or user.id} ({status})")
+        # Initialize lists and counters
+        premium_users = []
+        deleted_count = 0
+
+        # Fetch all members
+        async for user in client.iter_participants(chat):
+            if getattr(user, 'is_premiumлогин', False):
+                premium_users.append(f"@{user.username}" if user.username else f"ID:{user.id}")
+            if user.is_deleted:
+                deleted_count += 1
 
         response = (
             f"📋 Detailed Group Stats 📋\n"
-            f"Admins: {', '.join(admin_users) or 'None'}\n"
-            f"Note: Full member list (deleted/premium) is not supported by the Bot API."
+            f"Premium Members: {', '.join(premium_users) or 'None'}\n"
+            f"Deleted Accounts: {deleted_count}"
         )
-        await update.message.reply_text(response)
+        await event.reply(response)
 
     except Exception as e:
-        await update.message.reply_text(f"Error fetching detailed stats: {e}")
+        await event.reply(f"Error fetching detailed stats: {e}")
 
 # Command handler for /refresh
-async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Check if the command is used in a group
-    if not update.effective_chat or update.effective_chat.type not in ['group', 'supergroup']:
-        await update.message.reply_text("This command can only be used in a group or supergroup.")
+@client.on(events.NewMessage(pattern='/refresh'))
+async def refresh(event):
+    if not event.is_group:
+        await event.reply("This command can only be used in a group or supergroup.")
         return
-    await stats(update, context)  # Reuse stats function
-    await update.message.reply_text("Stats refreshed!")
+    await stats(event)
+    await event.reply("Stats refreshed!")
 
-# Error handler
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error(f"Update {update} caused error {context.error}")
-    if update.effective_message:
-        await update.effective_message.reply_text("An error occurred. Please try again later.")
-
-def main() -> None:
-    # Get the bot token from environment variable (for Heroku)
-    token = os.getenv("BOT_TOKEN")
-    if not token:
+# Start the client
+async def main():
+    if not bot_token:
         logger.error("BOT_TOKEN environment variable not set")
         return
-
-    # Create the Application
-    application = Application.builder().token(token).build()
-
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help))
-    application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(CommandHandler("details", details))
-    application.add_handler(CommandHandler("refresh", refresh))
-    application.add_error_handler(error_handler)
-
-    # Start the bot
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    await client.start(bot_token=bot_token)
+    await client.run_until_disconnected()
 
 if __name__ == '__main__':
-    main()
+    with client:
+        client.loop.run_until_complete(main())
