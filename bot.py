@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # Telegram Client API credentials
 api_id = 20284828
 api_hash = "a980ba25306901d5c9b899414d6a9ab7"
-bot_token = os.getenv("7593658145:AAETv2jYleC4eZU67eZjeyv3w4KdDKFQ5fg")  # Set in Heroku environment
+bot_token = os.getenv("BOT_TOKEN")
 
 # Initialize Telethon client
 client = TelegramClient('bot', api_id, api_hash)
@@ -112,7 +112,7 @@ async def details(event):
 
         # Fetch all members
         async for user in client.iter_participants(chat):
-            if getattr(user, 'is_premiumлогин', False):
+            if getattr(user, 'is_premium', False):
                 premium_users.append(f"@{user.username}" if user.username else f"ID:{user.id}")
             if user.is_deleted:
                 deleted_count += 1
@@ -139,10 +139,15 @@ async def refresh(event):
 # Start the client
 async def main():
     if not bot_token:
-        logger.error("BOT_TOKEN environment variable not set")
-        return
-    await client.start(bot_token=bot_token)
-    await client.run_until_disconnected()
+        logger.error("BOT_TOKEN environment variable not set. Please set it in Heroku config vars.")
+        raise ValueError("BOT_TOKEN is not set")
+    try:
+        await client.start(bot_token=bot_token)
+        logger.info("Bot started successfully")
+        await client.run_until_disconnected()
+    except Exception as e:
+        logger.error(f"Failed to start bot: {e}")
+        raise
 
 if __name__ == '__main__':
     with client:
