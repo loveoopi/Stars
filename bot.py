@@ -45,8 +45,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         # Get total member count
-        total_count = await context.bot.get_chat_members_count(chat_id)
-
+        total_count = await context.bot.get_chat_member_count(chat_id)
+        
         # Note: Bot API doesn't allow fetching all members to check deleted/premium status
         response = (
             f"📊 Group Member Statistics 📊\n"
