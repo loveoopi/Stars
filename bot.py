@@ -3,7 +3,6 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import os
 from telethon.sync import TelegramClient
-from telethon.tl.types import ChannelParticipantsSearch
 from telethon.errors import FloodWaitError
 import asyncio
 from datetime import datetime, timedelta
@@ -51,33 +50,17 @@ async def get_detailed_stats(chat_id):
         return None
     
     try:
-        deleted_count = 0
         premium_count = 0
         total_count = 0
-        bot_count = 0
-        deleted_usernames = []  # List to store usernames of deleted accounts
         
         async for user in client.iter_participants(chat_id):
             total_count += 1
-            if user.deleted:
-                deleted_count += 1
-                # Try to get username; may be None for deleted accounts
-                username = user.username if user.username else "No username"
-                deleted_usernames.append(username)
-                if len(deleted_usernames) >= 10:  # Limit to 10 deleted accounts
-                    break
-            elif user.bot:
-                bot_count += 1
-            elif getattr(user, 'premium', False):
+            if not user.deleted and not user.bot and getattr(user, 'premium', False):
                 premium_count += 1
                 
         return {
             'total': total_count,
-            'deleted': deleted_count,
-            'premium': premium_count,
-            'bots': bot_count,
-            'active': total_count - deleted_count - bot_count,
-            'deleted_usernames': deleted_usernames[:10]  # Return up to 10 usernames
+            'premium': premium_count
         }
     except FloodWaitError as e:
         logger.error(f"Flood wait: {e}")
@@ -104,7 +87,7 @@ async def get_cached_stats(chat_id):
 # Command handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Hello! I'm an advanced group stats bot. Use /stats in a group to get detailed member statistics. "
+        "Hello! I'm a group stats bot. Use /stats in a group to get total and Premium member counts. "
         "Make sure I'm an admin with the right permissions!"
     )
 
@@ -119,7 +102,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         admins = await context.bot.get_chat_administrators(chat_id)
         if not any(admin.user.id == bot_id for admin in admins):
-            await update.message.reply_text("I need to be an admin with member access to fetch detailed stats!")
+            await update.message.reply_text("I need to be an admin with member access to fetch stats!")
             return
     except Exception as e:
         await update.message.reply_text(f"Error checking admin status: {e}")
@@ -134,24 +117,18 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         if not detailed_stats:
             await update.message.reply_text(
-                f"📊 Basic Group Stats 📊\n"
+                f"📊 Group Stats 📊\n"
                 f"Total Members: {total_count}\n"
-                f"Detailed stats unavailable right now. Please try again later."
+                f"Premium stats unavailable right now. Please try again later."
             )
             return
         
-        premium_percentage = (detailed_stats['premium'] / detailed_stats['active'] * 100) if detailed_stats['active'] > 0 else 0
-        deleted_usernames = detailed_stats.get('deleted_usernames', [])
-        usernames_text = "\n".join([f"- {username}" for username in deleted_usernames]) if deleted_usernames else "None found"
+        premium_percentage = (detailed_stats['premium'] / total_count * 100) if total_count > 0 else 0
         
         response = (
-            f"📊 Advanced Group Statistics 📊\n"
+            f"📊 Group Statistics 📊\n"
             f"👥 Total Members: {total_count}\n"
-            f"🟢 Active Users: {detailed_stats['active']}\n"
-            f"🧟 Deleted Accounts: {detailed_stats['deleted']}\n"
-            f"🤖 Bots: {detailed_stats['bots']}\n"
             f"⭐ Premium Members: {detailed_stats['premium']} ({premium_percentage:.1f}%)\n"
-            f"🧟‍♂️ Usernames of up to 10 Deleted Accounts:\n{usernames_text}\n"
             f"\n"
             f"Last updated: {stats_cache[chat_id]['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"Use /refresh to update stats"
@@ -179,7 +156,7 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Available commands:\n"
         "/start - Welcome message\n"
-        "/stats - Get detailed group member statistics\n"
+        "/stats - Get total and Premium member counts\n"
         "/refresh - Force refresh group stats\n"
         "/help - Show this help message"
     )
