@@ -55,11 +55,17 @@ async def get_detailed_stats(chat_id):
         premium_count = 0
         total_count = 0
         bot_count = 0
+        deleted_usernames = []  # List to store usernames of deleted accounts
         
         async for user in client.iter_participants(chat_id):
             total_count += 1
             if user.deleted:
                 deleted_count += 1
+                # Try to get username; may be None for deleted accounts
+                username = user.username if user.username else "No username"
+                deleted_usernames.append(username)
+                if len(deleted_usernames) >= 10:  # Limit to 10 deleted accounts
+                    break
             elif user.bot:
                 bot_count += 1
             elif getattr(user, 'premium', False):
@@ -70,7 +76,8 @@ async def get_detailed_stats(chat_id):
             'deleted': deleted_count,
             'premium': premium_count,
             'bots': bot_count,
-            'active': total_count - deleted_count - bot_count
+            'active': total_count - deleted_count - bot_count,
+            'deleted_usernames': deleted_usernames[:10]  # Return up to 10 usernames
         }
     except FloodWaitError as e:
         logger.error(f"Flood wait: {e}")
@@ -134,6 +141,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         
         premium_percentage = (detailed_stats['premium'] / detailed_stats['active'] * 100) if detailed_stats['active'] > 0 else 0
+        deleted_usernames = detailed_stats.get('deleted_usernames', [])
+        usernames_text = "\n".join([f"- {username}" for username in deleted_usernames]) if deleted_usernames else "None found"
         
         response = (
             f"📊 Advanced Group Statistics 📊\n"
@@ -142,6 +151,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"🧟 Deleted Accounts: {detailed_stats['deleted']}\n"
             f"🤖 Bots: {detailed_stats['bots']}\n"
             f"⭐ Premium Members: {detailed_stats['premium']} ({premium_percentage:.1f}%)\n"
+            f"🧟‍♂️ Usernames of up to 10 Deleted Accounts:\n{usernames_text}\n"
             f"\n"
             f"Last updated: {stats_cache[chat_id]['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"Use /refresh to update stats"
